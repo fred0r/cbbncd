@@ -21,6 +21,7 @@ enum class State {
 class BncSession : private Core::EventReceiver {
 public:
   BncSession(int listenport, bool ident, bool noidnt, bool traffic, bool nat, const std::vector<Address>& natips);
+  ~BncSession();
   bool active();
   void activate(int sockid, const Address& addr);
   void targetDisconnected();

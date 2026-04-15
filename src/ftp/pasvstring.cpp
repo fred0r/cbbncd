@@ -1,5 +1,7 @@
 #include "pasvstring.h"
 
+#include <stdexcept>
+
 namespace {
 
 std::string addressFamilyToString(const Core::AddressFamily& addrfam) {
@@ -54,9 +56,14 @@ bool fromPASVString(const std::string& pasv, std::string& addr, int& port) {
   addr[sep2] = '.';
   addr[sep3] = '.';
   addr = addr.substr(0, sep4);
-  int major = std::stoi(pasv.substr(sep4 + 1, sep5 - sep4 + 1));
-  int minor = std::stoi(pasv.substr(sep5 + 1));
-  port = major * 256 + minor;
+  try {
+    int major = std::stoi(pasv.substr(sep4 + 1, sep5 - sep4 + 1));
+    int minor = std::stoi(pasv.substr(sep5 + 1));
+    port = major * 256 + minor;
+  }
+  catch (const std::exception&) {
+    return false;
+  }
   return true;
 }
 
@@ -90,7 +97,12 @@ bool fromExtendedPASVString(const std::string& epsv, Core::AddressFamily& addrfa
   }
   addrfam = stringToAddressFamily(epsv.substr(sep1 + 1, sep2 - sep1 - 1));
   addr = epsv.substr(sep2 + 1, sep3 - sep2 - 1);
-  port = std::stol(epsv.substr(sep3 + 1, sep4 - sep3 - 1));
+  try {
+    port = std::stol(epsv.substr(sep3 + 1, sep4 - sep3 - 1));
+  }
+  catch (const std::exception&) {
+    return false;
+  }
   return true;
 }
 

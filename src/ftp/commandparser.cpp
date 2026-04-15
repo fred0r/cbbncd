@@ -4,6 +4,7 @@
 #include <locale>
 
 #define DATA_BUF_SIZE 256
+#define MAX_DATA_BUF_SIZE 4096
 
 FTPCommandParser::FTPCommandParser() : databuflen(DATA_BUF_SIZE),
   databuf(static_cast<char*>(malloc(databuflen))), databufpos(0),
@@ -17,13 +18,19 @@ FTPCommandParser::~FTPCommandParser() {
 }
 
 bool FTPCommandParser::parse(const char* newdata, unsigned int newdatalen) {
+  if (databufpos + newdatalen > MAX_DATA_BUF_SIZE) {
+    return false;
+  }
   if (databufpos + newdatalen > databuflen) {
     while (databufpos + newdatalen > databuflen) {
       databuflen *= 2;
     }
+    if (databuflen > MAX_DATA_BUF_SIZE) {
+      databuflen = MAX_DATA_BUF_SIZE;
+    }
     char* newdatabuf = static_cast<char*>(malloc(databuflen));
     memcpy(newdatabuf, databuf, databufpos);
-    delete databuf;
+    free(databuf);
     databuf = newdatabuf;
   }
   memcpy(databuf + databufpos, newdata, newdatalen);

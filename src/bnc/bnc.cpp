@@ -18,6 +18,12 @@ Bnc::Bnc(int listenport, const std::list<Address>& siteaddrs, bool ident, bool n
   global->getIOManager()->registerTCPServerSocket(this, listenport, Core::AddressFamily::IPV6);
 }
 
+Bnc::~Bnc() {
+  for (BncSession* session : sessions) {
+    delete session;
+  }
+}
+
 void Bnc::FDNew(int sockid, int newsockid) {
   const Address& siteaddr = siteaddrs.at(nextsiteaddr);
   nextsiteaddr = (nextsiteaddr + 1) % siteaddrs.size();

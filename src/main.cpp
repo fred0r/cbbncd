@@ -93,12 +93,18 @@ Configuration parseData(const std::string& data) {
     std::string key = param.substr(0, sep);
     std::string value = param.substr(sep + 1);
     if (key == "port") {
-      long portval = std::stol(value);
-      if (portval < 1 || portval > 65535) {
-        std::cerr << "Error: Port out of range (1-65535). Exiting." << std::endl;
+      try {
+        long portval = std::stol(value);
+        if (portval < 1 || portval > 65535) {
+          std::cerr << "Error: Port out of range (1-65535). Exiting." << std::endl;
+          exit(1);
+        }
+        cfg.listenport = portval;
+      }
+      catch (const std::exception&) {
+        std::cerr << "Error: Invalid port value. Exiting." << std::endl;
         exit(1);
       }
-      cfg.listenport = portval;
     }
     else if (key == "host") {
       cfg.siteaddrs = parseAddresses(value);
@@ -126,14 +132,20 @@ Configuration parseData(const std::string& data) {
     }
     else if (key == "pasvportrange") {
       std::list<std::string> tokens = util::split(value, "-");
-      long first = std::stol(tokens.front());
-      long last = std::stol(tokens.back());
-      if (first < 1 || first > 65535 || last < 1 || last > 65535) {
-        std::cerr << "Error: Passive port range out of range (1-65535). Exiting." << std::endl;
+      try {
+        long first = std::stol(tokens.front());
+        long last = std::stol(tokens.back());
+        if (first < 1 || first > 65535 || last < 1 || last > 65535) {
+          std::cerr << "Error: Passive port range out of range (1-65535). Exiting." << std::endl;
+          exit(1);
+        }
+        cfg.pasvportfirst = first;
+        cfg.pasvportlast = last;
+      }
+      catch (const std::exception&) {
+        std::cerr << "Error: Invalid passive port range. Exiting." << std::endl;
         exit(1);
       }
-      cfg.pasvportfirst = first;
-      cfg.pasvportlast = last;
     }
     else if (key == "cert") {
       cfg.cert = value;

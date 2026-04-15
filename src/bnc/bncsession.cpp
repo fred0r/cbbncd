@@ -47,6 +47,11 @@ BncSession::BncSession(int listenport, bool ident, bool noidnt, bool traffic, bo
   }
 }
 
+BncSession::~BncSession() {
+  delete sessionclient;
+  delete identp;
+}
+
 bool BncSession::active() {
   return state != State::DISCONNECTED;
 }
