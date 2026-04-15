@@ -53,7 +53,8 @@ bool FTPResponseParser::parse(const char* newdata, unsigned int newdatalen) {
   if (messagecomplete) {
     if (databufcode == 550) {
       // workaround for a glftpd bug causing an extra row '550 Unable to load your own user file!.' on retr/stor
-      if (*(loc+4) == 'U' && *(loc+5) == 'n' && *(loc+28) == 'u' && *(loc+33) == 'f') {
+      char* bufend = databuf + databufpos;
+      if (loc + 34 <= bufend && *(loc+4) == 'U' && *(loc+5) == 'n' && *(loc+28) == 'u' && *(loc+33) == 'f') {
         databufpos = 0;
         complete = false;
         return false;

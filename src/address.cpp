@@ -105,7 +105,10 @@ Address parseAddress(std::string address) {
   }
   if (portpos != std::string::npos) {
     try {
-      addr.port = std::stoi(address.substr(portpos + 1));
+      int parsedport = std::stoi(address.substr(portpos + 1));
+      if (parsedport >= 1 && parsedport <= 65535) {
+        addr.port = parsedport;
+      }
     }
     catch (std::exception&) {
     }

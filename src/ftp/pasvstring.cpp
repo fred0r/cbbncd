@@ -59,7 +59,13 @@ bool fromPASVString(const std::string& pasv, std::string& addr, int& port) {
   try {
     int major = std::stoi(pasv.substr(sep4 + 1, sep5 - sep4 + 1));
     int minor = std::stoi(pasv.substr(sep5 + 1));
+    if (major < 0 || major > 255 || minor < 0 || minor > 255) {
+      return false;
+    }
     port = major * 256 + minor;
+    if (port < 1 || port > 65535) {
+      return false;
+    }
   }
   catch (const std::exception&) {
     return false;
@@ -98,7 +104,11 @@ bool fromExtendedPASVString(const std::string& epsv, Core::AddressFamily& addrfa
   addrfam = stringToAddressFamily(epsv.substr(sep1 + 1, sep2 - sep1 - 1));
   addr = epsv.substr(sep2 + 1, sep3 - sep2 - 1);
   try {
-    port = std::stol(epsv.substr(sep3 + 1, sep4 - sep3 - 1));
+    long parsedport = std::stol(epsv.substr(sep3 + 1, sep4 - sep3 - 1));
+    if (parsedport < 1 || parsedport > 65535) {
+      return false;
+    }
+    port = static_cast<int>(parsedport);
   }
   catch (const std::exception&) {
     return false;
