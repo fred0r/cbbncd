@@ -2,27 +2,25 @@
 
 #include <sstream>
 #include <climits>
-#include <ctime>
 #include <cstring>
+#include <arpa/inet.h>
 #include <openssl/sha.h>
 #include <openssl/evp.h>
+#include <openssl/rand.h>
 
 #define SALT_LENGTH 8
 #define SALT_STRING_LENGTH 16
-#define DEFAULT_ITER 10000
+#define LEGACY_DEFAULT_ITER 10000
+#define NEW_KDF_ITER 600000
+#define NEW_SALT_LENGTH 32
+#define NEW_IV_LENGTH 12
+#define NEW_GCM_TAG_LENGTH 16
+#define FORMAT_VERSION 0x01
 
 namespace {
 
-const EVP_CIPHER * cipher() {
-  return EVP_aes_256_cbc();
-}
-
 const EVP_MD * digest() {
   return EVP_sha256();
-}
-
-int blockSize() {
-  return EVP_CIPHER_block_size(cipher());
 }
 
 unsigned char hex2uc(char c) {
@@ -51,34 +49,72 @@ void Crypto::encrypt(const Core::BinaryData & indata, const Core::BinaryData & p
     outdata.resize(0);
     return;
   }
-  EVP_CIPHER_CTX * ctx = EVP_CIPHER_CTX_new();
-  const EVP_CIPHER * cipherp = cipher();
 
-  int keylen = EVP_CIPHER_key_length(cipherp);
-  unsigned char tmpkeyiv[EVP_MAX_KEY_LENGTH + EVP_MAX_IV_LENGTH];
-  unsigned char* key = tmpkeyiv;
-  unsigned char* iv = tmpkeyiv + keylen;
-  outdata.resize(SALT_STRING_LENGTH + indata.size() + blockSize());
-  memcpy(&outdata[0], "Salted__", SALT_STRING_LENGTH - SALT_LENGTH);
-  srand(time(NULL));
-  for (int i = SALT_LENGTH; i < SALT_STRING_LENGTH; ++i) {
-    outdata[i] = (unsigned char)(rand() % UCHAR_MAX);
+  unsigned char salt[NEW_SALT_LENGTH];
+  if (RAND_bytes(salt, sizeof(salt)) != 1) {
+    outdata.resize(0);
+    return;
   }
-#if OPENSSL_VERSION_NUMBER < 0x10000000L
-  EVP_BytesToKey(cipherp, digest(), &outdata[SALT_STRING_LENGTH - SALT_LENGTH], !pass.empty() ? pass.data() : NULL,
-                 pass.size(), 1, key, iv);
-#else
-  int ivlen = EVP_CIPHER_iv_length(cipherp);
+
+  unsigned char iv[NEW_IV_LENGTH];
+  if (RAND_bytes(iv, sizeof(iv)) != 1) {
+    outdata.resize(0);
+    return;
+  }
+
+  unsigned char key[32];
   PKCS5_PBKDF2_HMAC(reinterpret_cast<const char*>(pass.data()), pass.size(),
-                    &outdata[SALT_STRING_LENGTH - SALT_LENGTH], SALT_LENGTH,
-                    DEFAULT_ITER, digest(), keylen + ivlen, tmpkeyiv);
-#endif
-  int resultlen;
-  int finallen;
-  EVP_EncryptInit_ex(ctx, cipherp, NULL, key, iv);
-  EVP_EncryptUpdate(ctx, &outdata[SALT_STRING_LENGTH], &resultlen, &indata[0], indata.size());
-  EVP_EncryptFinal_ex(ctx, &outdata[SALT_STRING_LENGTH + resultlen], &finallen);
-  outdata.resize(SALT_STRING_LENGTH + resultlen + finallen);
+                     salt, sizeof(salt), NEW_KDF_ITER, digest(), sizeof(key), key);
+
+  EVP_CIPHER_CTX * ctx = EVP_CIPHER_CTX_new();
+  if (!ctx) {
+    outdata.resize(0);
+    return;
+  }
+
+  if (EVP_EncryptInit_ex(ctx, EVP_aes_256_gcm(), nullptr, nullptr, nullptr) != 1 ||
+      EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, sizeof(iv), nullptr) != 1 ||
+      EVP_EncryptInit_ex(ctx, nullptr, nullptr, key, iv) != 1)
+  {
+    EVP_CIPHER_CTX_free(ctx);
+    outdata.resize(0);
+    return;
+  }
+
+  size_t header_size = 1 + 4 + sizeof(salt) + sizeof(iv);
+  outdata.resize(header_size + indata.size() + NEW_GCM_TAG_LENGTH);
+
+  outdata[0] = FORMAT_VERSION;
+  uint32_t saltlen_net = htonl(sizeof(salt));
+  memcpy(&outdata[1], &saltlen_net, 4);
+  memcpy(&outdata[5], salt, sizeof(salt));
+  memcpy(&outdata[5 + sizeof(salt)], iv, sizeof(iv));
+
+  int outlen = 0;
+  if (EVP_EncryptUpdate(ctx, &outdata[header_size], &outlen, indata.data(), indata.size()) != 1) {
+    EVP_CIPHER_CTX_free(ctx);
+    outdata.resize(0);
+    return;
+  }
+
+  int finallen = 0;
+  if (EVP_EncryptFinal_ex(ctx, &outdata[header_size + outlen], &finallen) != 1) {
+    EVP_CIPHER_CTX_free(ctx);
+    outdata.resize(0);
+    return;
+  }
+
+  unsigned char tag[NEW_GCM_TAG_LENGTH];
+  if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_GET_TAG, sizeof(tag), tag) != 1) {
+    EVP_CIPHER_CTX_free(ctx);
+    outdata.resize(0);
+    return;
+  }
+
+  size_t ciphertext_len = outlen + finallen;
+  memcpy(&outdata[header_size + ciphertext_len], tag, sizeof(tag));
+  outdata.resize(header_size + ciphertext_len + sizeof(tag));
+
   EVP_CIPHER_CTX_free(ctx);
 }
 
@@ -87,8 +123,97 @@ void Crypto::decrypt(const Core::BinaryData & indata, const Core::BinaryData & p
     outdata.resize(0);
     return;
   }
+
+  if (indata.size() >= 8 && memcmp(&indata[0], "Salted__", 8) == 0) {
+    decryptLegacy(indata, pass, outdata);
+    return;
+  }
+
+  if (indata.size() < 1 || indata[0] != FORMAT_VERSION) {
+    outdata.resize(0);
+    return;
+  }
+
+  size_t pos = 1;
+
+  if (indata.size() < pos + 4) {
+    outdata.resize(0);
+    return;
+  }
+  uint32_t saltlen_net;
+  memcpy(&saltlen_net, &indata[pos], 4);
+  uint32_t saltlen = ntohl(saltlen_net);
+  pos += 4;
+
+  if (indata.size() < pos + saltlen) {
+    outdata.resize(0);
+    return;
+  }
+  const unsigned char * salt = &indata[pos];
+  pos += saltlen;
+
+  if (indata.size() < pos + NEW_IV_LENGTH) {
+    outdata.resize(0);
+    return;
+  }
+  unsigned char iv[NEW_IV_LENGTH];
+  memcpy(iv, &indata[pos], sizeof(iv));
+  pos += sizeof(iv);
+
+  if (indata.size() < pos + NEW_GCM_TAG_LENGTH) {
+    outdata.resize(0);
+    return;
+  }
+  size_t ciphertext_len = indata.size() - pos - NEW_GCM_TAG_LENGTH;
+
+  unsigned char key[32];
+  PKCS5_PBKDF2_HMAC(reinterpret_cast<const char*>(pass.data()), pass.size(),
+                     salt, saltlen, NEW_KDF_ITER, digest(), sizeof(key), key);
+
   EVP_CIPHER_CTX * ctx = EVP_CIPHER_CTX_new();
-  const EVP_CIPHER * cipherp = cipher();
+  if (!ctx) {
+    outdata.resize(0);
+    return;
+  }
+
+  if (EVP_DecryptInit_ex(ctx, EVP_aes_256_gcm(), nullptr, nullptr, nullptr) != 1 ||
+      EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, sizeof(iv), nullptr) != 1 ||
+      EVP_DecryptInit_ex(ctx, nullptr, nullptr, key, iv) != 1)
+  {
+    EVP_CIPHER_CTX_free(ctx);
+    outdata.resize(0);
+    return;
+  }
+
+  outdata.resize(ciphertext_len);
+  int outlen = 0;
+  if (EVP_DecryptUpdate(ctx, outdata.data(), &outlen, &indata[pos], ciphertext_len) != 1) {
+    EVP_CIPHER_CTX_free(ctx);
+    outdata.resize(0);
+    return;
+  }
+
+  if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_TAG, NEW_GCM_TAG_LENGTH,
+                          const_cast<unsigned char *>(&indata[pos + ciphertext_len])) != 1) {
+    EVP_CIPHER_CTX_free(ctx);
+    outdata.resize(0);
+    return;
+  }
+
+  int finallen = 0;
+  if (EVP_DecryptFinal_ex(ctx, outdata.data() + outlen, &finallen) != 1) {
+    EVP_CIPHER_CTX_free(ctx);
+    outdata.resize(0);
+    return;
+  }
+
+  outdata.resize(outlen + finallen);
+  EVP_CIPHER_CTX_free(ctx);
+}
+
+void Crypto::decryptLegacy(const Core::BinaryData & indata, const Core::BinaryData & pass, Core::BinaryData & outdata) {
+  EVP_CIPHER_CTX * ctx = EVP_CIPHER_CTX_new();
+  const EVP_CIPHER * cipherp = EVP_aes_256_cbc();
 
   int keylen = EVP_CIPHER_key_length(cipherp);
   unsigned char tmpkeyiv[EVP_MAX_KEY_LENGTH + EVP_MAX_IV_LENGTH];
@@ -101,9 +226,9 @@ void Crypto::decrypt(const Core::BinaryData & indata, const Core::BinaryData & p
   int ivlen = EVP_CIPHER_iv_length(cipherp);
   PKCS5_PBKDF2_HMAC(reinterpret_cast<const char*>(pass.data()), pass.size(),
                     &indata[SALT_STRING_LENGTH - SALT_LENGTH], SALT_LENGTH,
-                    DEFAULT_ITER, digest(), keylen + ivlen, tmpkeyiv);
+                    LEGACY_DEFAULT_ITER, digest(), keylen + ivlen, tmpkeyiv);
 #endif
-  outdata.resize(indata.size() + blockSize());
+  outdata.resize(indata.size() + EVP_CIPHER_block_size(cipherp));
   int writelen;
   int finalwritelen;
   EVP_DecryptInit_ex(ctx, cipherp, NULL, key, iv);

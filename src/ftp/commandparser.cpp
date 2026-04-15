@@ -13,7 +13,7 @@ FTPCommandParser::FTPCommandParser() : databuflen(DATA_BUF_SIZE),
 }
 
 FTPCommandParser::~FTPCommandParser() {
-  delete databuf;
+  free(databuf);
 }
 
 bool FTPCommandParser::parse(const char* newdata, unsigned int newdatalen) {

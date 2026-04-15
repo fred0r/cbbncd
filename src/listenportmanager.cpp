@@ -1,24 +1,30 @@
 #include "listenportmanager.h"
 
 #include <cassert>
-#include <cstdlib>
-#include <ctime>
 #include <list>
+
+#include <openssl/rand.h>
 
 #include "core/tickpoke.h"
 #include "globalcontext.h"
 
-
 namespace {
 
-const int tickinterval = 600000; // 10 minutes
+const int tickinterval = 600000;
 const std::string tag = "[ListenPortManager] ";
+
+unsigned int secureRand(unsigned int max) {
+  unsigned int result;
+  if (RAND_bytes(reinterpret_cast<unsigned char*>(&result), sizeof(result)) != 1) {
+    result = static_cast<unsigned int>(time(nullptr));
+  }
+  return result % max;
+}
 
 }
 
 ListenPortManager::ListenPortManager(int firstport, int lastport) : firstport(firstport), lastport(lastport) {
   global->getTickPoke()->startPoke(this, "ListenPortManager", tickinterval, 0);
-  srand(time(nullptr));
   setPortRange(firstport, lastport);
 }
 
@@ -38,7 +44,7 @@ void ListenPortManager::setPortRange(int first, int last) {
 }
 
 int ListenPortManager::acquirePort() {
-  size_t startpos = rand() % availableports.size();
+  size_t startpos = secureRand(availableports.size());
   size_t pos = startpos;
   while (true) {
     if (availableports[pos]) {

@@ -12,6 +12,8 @@
 #include <string>
 #include <sstream>
 
+#include <openssl/crypto.h>
+
 #include "core/workmanager.h"
 #include "core/tickpoke.h"
 #include "core/iomanager.h"
@@ -91,7 +93,12 @@ Configuration parseData(const std::string& data) {
     std::string key = param.substr(0, sep);
     std::string value = param.substr(sep + 1);
     if (key == "port") {
-      cfg.listenport = std::stol(value);
+      long portval = std::stol(value);
+      if (portval < 1 || portval > 65535) {
+        std::cerr << "Error: Port out of range (1-65535). Exiting." << std::endl;
+        exit(1);
+      }
+      cfg.listenport = portval;
     }
     else if (key == "host") {
       cfg.siteaddrs = parseAddresses(value);
@@ -119,8 +126,14 @@ Configuration parseData(const std::string& data) {
     }
     else if (key == "pasvportrange") {
       std::list<std::string> tokens = util::split(value, "-");
-      cfg.pasvportfirst = std::stol(tokens.front());
-      cfg.pasvportlast = std::stol(tokens.back());
+      long first = std::stol(tokens.front());
+      long last = std::stol(tokens.back());
+      if (first < 1 || first > 65535 || last < 1 || last > 65535) {
+        std::cerr << "Error: Passive port range out of range (1-65535). Exiting." << std::endl;
+        exit(1);
+      }
+      cfg.pasvportfirst = first;
+      cfg.pasvportlast = last;
     }
     else if (key == "cert") {
       cfg.cert = value;
@@ -152,11 +165,19 @@ int main(int argc, char** argv) {
     Crypto::base64Decode(Core::BinaryData(data.begin(), data.end()), decodeddata);
     Core::BinaryData decrypteddata;
     Crypto::decrypt(decodeddata, passphrase, decrypteddata);
-    if (!Crypto::isMostlyASCII(decrypteddata)) {
+    OPENSSL_cleanse(passphrase.data(), passphrase.size());
+    if (decrypteddata.empty()) {
+      std::cerr << "Error: Passphrase invalid or data tampered. Exiting." << std::endl;
+      exit(1);
+    }
+    bool islegacy = decodeddata.size() >= 8 && memcmp(decodeddata.data(), "Salted__", 8) == 0;
+    if (islegacy && !Crypto::isMostlyASCII(decrypteddata)) {
       std::cerr << "Error: Passphrase invalid. Exiting." << std::endl;
+      OPENSSL_cleanse(decrypteddata.data(), decrypteddata.size());
       exit(1);
     }
     data = std::string(decrypteddata.begin(), decrypteddata.end());
+    OPENSSL_cleanse(decrypteddata.data(), decrypteddata.size());
   }
   Configuration cfg = parseData(data);
 
