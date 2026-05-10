@@ -81,9 +81,21 @@ void BncSessionClient::FDConnected(int sockid) {
   if (nat) {
     if (siteaddrfam == Core::AddressFamily::IPV4) {
       siterewriteaddr = rewriteaddr4;
+      if (siterewriteaddr.empty()) {
+        Core::StringResult res = global->getIOManager()->getInterfaceAddress4(sockid);
+        if (res.success) {
+          siterewriteaddr = res.result;
+        }
+      }
     }
     if (siteaddrfam == Core::AddressFamily::IPV6) {
       siterewriteaddr = rewriteaddr6;
+      if (siterewriteaddr.empty()) {
+        Core::StringResult res = global->getIOManager()->getInterfaceAddress6(sockid);
+        if (res.success) {
+          siterewriteaddr = res.result;
+        }
+      }
     }
   }
   else {

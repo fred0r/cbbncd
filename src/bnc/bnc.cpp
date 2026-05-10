@@ -1,6 +1,7 @@
 #include "bnc.h"
 
 #include <cstdlib>
+#include <memory>
 
 #include "../core/iomanager.h"
 
@@ -34,9 +35,9 @@ void Bnc::FDNew(int sockid, int newsockid) {
       return;
     }
   }
-  BncSession* session = new BncSession(listenport, ident, noidnt, traffic, nat, natips);
+  std::unique_ptr<BncSession> session(new BncSession(listenport, ident, noidnt, traffic, nat, natips));
   session->activate(newsockid, siteaddr);
-  sessions.push_back(session);
+  sessions.push_back(session.release());
 }
 
 void Bnc::FDFail(int sockid, const std::string& err) {

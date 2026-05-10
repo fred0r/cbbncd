@@ -37,7 +37,7 @@ bool FTPResponseParser::parse(const char* newdata, unsigned int newdatalen) {
   databufpos += newdatalen;
   bool messagecomplete = false;
   char* loc = 0;
-  if(databuf[databufpos - 1] == '\n') {
+  if (databufpos >= 5 && databuf[databufpos - 1] == '\n') {
     loc = databuf + databufpos - 5;
     while (loc >= databuf) {
       if (isdigit(*loc) && isdigit(*(loc+1)) && isdigit(*(loc+2))) {

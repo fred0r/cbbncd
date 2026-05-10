@@ -1,6 +1,5 @@
 #include "crypto.h"
 
-#include <sstream>
 #include <climits>
 #include <cstring>
 #include <arpa/inet.h>
@@ -251,6 +250,10 @@ void Crypto::sha256(const Core::BinaryData & indata, Core::BinaryData & outdata)
   }
   outdata.resize(EVP_MD_size(digest()));
   EVP_MD_CTX* ctx = EVP_MD_CTX_new();
+  if (!ctx) {
+    outdata.resize(0);
+    return;
+  }
   EVP_DigestInit(ctx, digest());
   EVP_DigestUpdate(ctx, &indata[0], indata.size());
   EVP_DigestFinal(ctx, &outdata[0], nullptr);
@@ -294,11 +297,12 @@ bool Crypto::isMostlyASCII(const Core::BinaryData& data) {
 }
 
 std::string Crypto::toHex(const Core::BinaryData& indata) {
-  std::stringstream sstream;
+  std::string out;
+  out.reserve(indata.size() * 2);
   for (size_t i = 0; i < indata.size(); ++i) {
-    sstream << uc2hex(indata[i]);
+    out += uc2hex(indata[i]);
   }
-  return sstream.str();
+  return out;
 }
 
 void Crypto::fromHex(const std::string& indata, Core::BinaryData& outdata) {

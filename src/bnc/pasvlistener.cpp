@@ -29,14 +29,14 @@ void PasvListener::disconnect() {
 }
 
 void PasvListener::FDNew(int sockid, int newsockid) {
-  tbnc->pasvConnected(newsockid);
   disconnect();
+  tbnc->pasvConnected(newsockid);
 }
 
 void PasvListener::FDFail(int sockid, const std::string& err) {
   if (!failedlistenports.empty()) {
     global->log("[" + sessiontag + "] Failed to bind on port " + std::to_string(failedlistenports.front()) + ": " + err);
-    failedlistenports.pop_front();
+    failedlistenports.clear();
   }
   else {
     global->log("[" + sessiontag + "] Failed to bind server socket: " + err);

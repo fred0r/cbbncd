@@ -94,15 +94,6 @@ void BncSession::activate(int sockid, const Address& addr) {
   else {
     state = State::ESTABLISHED;
     if (!noidnt) {
-      std::string nocolonsrcaddr;
-      for (size_t i = 0; i < srcaddr.length(); ++i) {
-        if (srcaddr[i] == ':') {
-          nocolonsrcaddr += "\x3A";
-        }
-        else {
-          nocolonsrcaddr += srcaddr[i];
-        }
-      }
       sessionclient->ident("*@" + srcaddr + ":" + colonReplace(srcaddr));
     }
   }
@@ -135,10 +126,10 @@ void BncSession::FDDisconnected(int sockid, Core::DisconnectType reason, const s
   if (state == State::IDENT) {
     identp->close();
   }
+  state = State::DISCONNECTED;
   global->log("[" + sessiontag + "] Client closed the connection. Disconnecting server. Session finished.");
   sessionclient->disconnect();
   sendqueue.clear();
-  state = State::DISCONNECTED;
 }
 
 void BncSession::FDData(int sockid, char* data, unsigned int datalen) {
