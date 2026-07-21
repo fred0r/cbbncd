@@ -241,6 +241,11 @@ void Crypto::decrypt(const Core::BinaryData & indata, const Core::BinaryData & p
 }
 
 void Crypto::decryptLegacy(const Core::BinaryData & indata, const Core::BinaryData & pass, Core::BinaryData & outdata) {
+  if (indata.size() < SALT_STRING_LENGTH + 1) {
+    outdata.resize(0);
+    return;
+  }
+
   EVP_CIPHER_CTX * ctx = EVP_CIPHER_CTX_new();
   const EVP_CIPHER * cipherp = EVP_aes_256_cbc();
 
@@ -258,13 +263,20 @@ void Crypto::decryptLegacy(const Core::BinaryData & indata, const Core::BinaryDa
                     LEGACY_DEFAULT_ITER, digest(), keylen + ivlen, tmpkeyiv);
 #endif
   outdata.resize(indata.size() + EVP_CIPHER_block_size(cipherp));
-  int writelen;
-  int finalwritelen;
-  EVP_DecryptInit_ex(ctx, cipherp, NULL, key, iv);
-  EVP_DecryptUpdate(ctx, &outdata[0], &writelen, &indata[SALT_STRING_LENGTH],
-                    indata.size() - SALT_STRING_LENGTH);
-  EVP_DecryptFinal_ex(ctx, &outdata[writelen], &finalwritelen);
-  outdata.resize(writelen + finalwritelen);
+  int writelen = 0;
+  int finalwritelen = 0;
+  bool ok = true;
+  ok = ok && (EVP_DecryptInit_ex(ctx, cipherp, NULL, key, iv) == 1);
+  ok = ok && (EVP_DecryptUpdate(ctx, &outdata[0], &writelen, &indata[SALT_STRING_LENGTH],
+                    indata.size() - SALT_STRING_LENGTH) == 1);
+  if (ok) {
+    ok = (EVP_DecryptFinal_ex(ctx, &outdata[writelen], &finalwritelen) == 1);
+  }
+  if (ok) {
+    outdata.resize(writelen + finalwritelen);
+  } else {
+    outdata.resize(0);
+  }
   EVP_CIPHER_CTX_free(ctx);
   OPENSSL_cleanse(tmpkeyiv, sizeof(tmpkeyiv));
 }

@@ -183,12 +183,7 @@ int main(int argc, char** argv) {
     OPENSSL_cleanse(decodeddata.data(), decodeddata.size());
     if (decrypteddata.empty()) {
       std::cerr << "Error: Passphrase invalid or data tampered. Exiting." << std::endl;
-      exit(1);
-    }
-    bool islegacy = decodeddata.size() >= 8 && memcmp(decodeddata.data(), "Salted__", 8) == 0;
-    if (islegacy && !Crypto::isMostlyASCII(decrypteddata)) {
-      std::cerr << "Error: Passphrase invalid. Exiting." << std::endl;
-      OPENSSL_cleanse(decrypteddata.data(), decrypteddata.size());
+      OPENSSL_cleanse(decodeddata.data(), decodeddata.size());
       exit(1);
     }
     data = std::string(decrypteddata.begin(), decrypteddata.end());
