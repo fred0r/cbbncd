@@ -6,6 +6,7 @@
 #include <openssl/sha.h>
 #include <openssl/evp.h>
 #include <openssl/rand.h>
+#include <openssl/crypto.h>
 
 #define SALT_LENGTH 8
 #define SALT_STRING_LENGTH 16
@@ -67,6 +68,9 @@ void Crypto::encrypt(const Core::BinaryData & indata, const Core::BinaryData & p
 
   EVP_CIPHER_CTX * ctx = EVP_CIPHER_CTX_new();
   if (!ctx) {
+    OPENSSL_cleanse(key, sizeof(key));
+    OPENSSL_cleanse(salt, sizeof(salt));
+    OPENSSL_cleanse(iv, sizeof(iv));
     outdata.resize(0);
     return;
   }
@@ -76,6 +80,9 @@ void Crypto::encrypt(const Core::BinaryData & indata, const Core::BinaryData & p
       EVP_EncryptInit_ex(ctx, nullptr, nullptr, key, iv) != 1)
   {
     EVP_CIPHER_CTX_free(ctx);
+    OPENSSL_cleanse(key, sizeof(key));
+    OPENSSL_cleanse(salt, sizeof(salt));
+    OPENSSL_cleanse(iv, sizeof(iv));
     outdata.resize(0);
     return;
   }
@@ -92,6 +99,9 @@ void Crypto::encrypt(const Core::BinaryData & indata, const Core::BinaryData & p
   int outlen = 0;
   if (EVP_EncryptUpdate(ctx, &outdata[header_size], &outlen, indata.data(), indata.size()) != 1) {
     EVP_CIPHER_CTX_free(ctx);
+    OPENSSL_cleanse(key, sizeof(key));
+    OPENSSL_cleanse(salt, sizeof(salt));
+    OPENSSL_cleanse(iv, sizeof(iv));
     outdata.resize(0);
     return;
   }
@@ -99,6 +109,9 @@ void Crypto::encrypt(const Core::BinaryData & indata, const Core::BinaryData & p
   int finallen = 0;
   if (EVP_EncryptFinal_ex(ctx, &outdata[header_size + outlen], &finallen) != 1) {
     EVP_CIPHER_CTX_free(ctx);
+    OPENSSL_cleanse(key, sizeof(key));
+    OPENSSL_cleanse(salt, sizeof(salt));
+    OPENSSL_cleanse(iv, sizeof(iv));
     outdata.resize(0);
     return;
   }
@@ -106,6 +119,9 @@ void Crypto::encrypt(const Core::BinaryData & indata, const Core::BinaryData & p
   unsigned char tag[NEW_GCM_TAG_LENGTH];
   if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_GET_TAG, sizeof(tag), tag) != 1) {
     EVP_CIPHER_CTX_free(ctx);
+    OPENSSL_cleanse(key, sizeof(key));
+    OPENSSL_cleanse(salt, sizeof(salt));
+    OPENSSL_cleanse(iv, sizeof(iv));
     outdata.resize(0);
     return;
   }
@@ -115,6 +131,10 @@ void Crypto::encrypt(const Core::BinaryData & indata, const Core::BinaryData & p
   outdata.resize(header_size + ciphertext_len + sizeof(tag));
 
   EVP_CIPHER_CTX_free(ctx);
+  OPENSSL_cleanse(key, sizeof(key));
+  OPENSSL_cleanse(salt, sizeof(salt));
+  OPENSSL_cleanse(iv, sizeof(iv));
+  OPENSSL_cleanse(tag, sizeof(tag));
 }
 
 void Crypto::decrypt(const Core::BinaryData & indata, const Core::BinaryData & pass, Core::BinaryData & outdata) {
@@ -180,6 +200,8 @@ void Crypto::decrypt(const Core::BinaryData & indata, const Core::BinaryData & p
       EVP_DecryptInit_ex(ctx, nullptr, nullptr, key, iv) != 1)
   {
     EVP_CIPHER_CTX_free(ctx);
+    OPENSSL_cleanse(key, sizeof(key));
+    OPENSSL_cleanse(iv, sizeof(iv));
     outdata.resize(0);
     return;
   }
@@ -188,6 +210,8 @@ void Crypto::decrypt(const Core::BinaryData & indata, const Core::BinaryData & p
   int outlen = 0;
   if (EVP_DecryptUpdate(ctx, outdata.data(), &outlen, &indata[pos], ciphertext_len) != 1) {
     EVP_CIPHER_CTX_free(ctx);
+    OPENSSL_cleanse(key, sizeof(key));
+    OPENSSL_cleanse(iv, sizeof(iv));
     outdata.resize(0);
     return;
   }
@@ -195,6 +219,8 @@ void Crypto::decrypt(const Core::BinaryData & indata, const Core::BinaryData & p
   if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_TAG, NEW_GCM_TAG_LENGTH,
                           const_cast<unsigned char *>(&indata[pos + ciphertext_len])) != 1) {
     EVP_CIPHER_CTX_free(ctx);
+    OPENSSL_cleanse(key, sizeof(key));
+    OPENSSL_cleanse(iv, sizeof(iv));
     outdata.resize(0);
     return;
   }
@@ -202,12 +228,16 @@ void Crypto::decrypt(const Core::BinaryData & indata, const Core::BinaryData & p
   int finallen = 0;
   if (EVP_DecryptFinal_ex(ctx, outdata.data() + outlen, &finallen) != 1) {
     EVP_CIPHER_CTX_free(ctx);
+    OPENSSL_cleanse(key, sizeof(key));
+    OPENSSL_cleanse(iv, sizeof(iv));
     outdata.resize(0);
     return;
   }
 
   outdata.resize(outlen + finallen);
   EVP_CIPHER_CTX_free(ctx);
+  OPENSSL_cleanse(key, sizeof(key));
+  OPENSSL_cleanse(iv, sizeof(iv));
 }
 
 void Crypto::decryptLegacy(const Core::BinaryData & indata, const Core::BinaryData & pass, Core::BinaryData & outdata) {
@@ -236,6 +266,7 @@ void Crypto::decryptLegacy(const Core::BinaryData & indata, const Core::BinaryDa
   EVP_DecryptFinal_ex(ctx, &outdata[writelen], &finalwritelen);
   outdata.resize(writelen + finalwritelen);
   EVP_CIPHER_CTX_free(ctx);
+  OPENSSL_cleanse(tmpkeyiv, sizeof(tmpkeyiv));
 }
 
 #if OPENSSL_VERSION_NUMBER < 0x10100000L

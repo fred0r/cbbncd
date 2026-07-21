@@ -8,6 +8,8 @@
 
 #include "bncsession.h"
 
+#include <openssl/crypto.h>
+
 Ident::Ident(BncSession* bncsession) : bncsession(bncsession), active(false) {
 }
 
@@ -40,12 +42,14 @@ void Ident::FDData(int sockid, char* buf, unsigned int buflen) {
       std::string user = identstr.substr(pos);
       global->log("[" + sessiontag + "] Received ident response: " + identstr);
       bncsession->ident(user);
+      OPENSSL_cleanse(&user[0], user.size());
     }
   }
   else {
     global->log("[" + sessiontag + "] Received unknown ident response: " + identstr);
     noIdent();
   }
+  OPENSSL_cleanse(&identstr[0], identstr.size());
   global->getIOManager()->closeSocket(sockid);
   deactivate();
 }

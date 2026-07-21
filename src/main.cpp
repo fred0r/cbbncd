@@ -65,7 +65,9 @@ Core::BinaryData getPassphrase() {
   std::getline(std::cin, passphrase);
   std::cerr << std::endl;
   showInput(true);
-  return Core::BinaryData(passphrase.begin(), passphrase.end());
+  Core::BinaryData result(passphrase.begin(), passphrase.end());
+  OPENSSL_cleanse(&passphrase[0], passphrase.size());
+  return result;
 }
 
 void daemonize() {
@@ -178,6 +180,7 @@ int main(int argc, char** argv) {
     Core::BinaryData decrypteddata;
     Crypto::decrypt(decodeddata, passphrase, decrypteddata);
     OPENSSL_cleanse(passphrase.data(), passphrase.size());
+    OPENSSL_cleanse(decodeddata.data(), decodeddata.size());
     if (decrypteddata.empty()) {
       std::cerr << "Error: Passphrase invalid or data tampered. Exiting." << std::endl;
       exit(1);
@@ -192,6 +195,7 @@ int main(int argc, char** argv) {
     OPENSSL_cleanse(decrypteddata.data(), decrypteddata.size());
   }
   Configuration cfg = parseData(data);
+  OPENSSL_cleanse(&data[0], data.size());
 
   if (daemon) {
     daemonize();
@@ -244,6 +248,10 @@ int main(int argc, char** argv) {
     Crypto::base64Decode(Core::BinaryData(cfg.cert.begin(), cfg.cert.end()), certdata);
     Crypto::base64Decode(Core::BinaryData(cfg.key.begin(), cfg.key.end()), keydata);
     Core::SSLManager::addCertKeyPair(keydata, certdata);
+    OPENSSL_cleanse(keydata.data(), keydata.size());
+    OPENSSL_cleanse(certdata.data(), certdata.size());
+    OPENSSL_cleanse(&cfg.key[0], cfg.key.size());
+    OPENSSL_cleanse(&cfg.cert[0], cfg.cert.size());
   }
   tp->tickerLoop();
 }

@@ -3,6 +3,7 @@
 #include <cassert>
 
 #include "../core/iomanager.h"
+#include <openssl/crypto.h>
 
 #include "../globalcontext.h"
 
@@ -391,6 +392,12 @@ bool BncSessionClient::sendData(const char* data, unsigned int datalen) {
   }
   bool needpause = !global->getIOManager()->sendData(sockid, commanddata, commandlen);
   commandparser.reset();
+  if (!command.empty()) {
+    OPENSSL_cleanse(&command[0], command.size());
+  }
+  if (!modifiedcommand.empty()) {
+    OPENSSL_cleanse(&modifiedcommand[0], modifiedcommand.size());
+  }
   return !needpause;
 }
 

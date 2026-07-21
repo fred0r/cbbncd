@@ -2,6 +2,7 @@
 
 #include <cstring>
 #include <locale>
+#include <openssl/crypto.h>
 
 #define DATA_BUF_SIZE 256
 #define MAX_DATA_BUF_SIZE 4096
@@ -14,6 +15,7 @@ FTPCommandParser::FTPCommandParser() : databuflen(DATA_BUF_SIZE),
 }
 
 FTPCommandParser::~FTPCommandParser() {
+  OPENSSL_cleanse(databuf, databufpos);
   free(databuf);
 }
 
@@ -30,6 +32,7 @@ bool FTPCommandParser::parse(const char* newdata, unsigned int newdatalen) {
     }
     char* newdatabuf = static_cast<char*>(malloc(databuflen));
     memcpy(newdatabuf, databuf, databufpos);
+    OPENSSL_cleanse(databuf, databufpos);
     free(databuf);
     databuf = newdatabuf;
   }
@@ -42,6 +45,7 @@ bool FTPCommandParser::parse(const char* newdata, unsigned int newdatalen) {
 }
 
 void FTPCommandParser::reset() {
+  OPENSSL_cleanse(databuf, databufpos);
   databufpos = 0;
   complete = false;
 }
