@@ -1,5 +1,7 @@
 #include "ident.h"
 
+#include <algorithm>
+
 #include "../core/iomanager.h"
 #include "../core/tickpoke.h"
 
@@ -40,6 +42,15 @@ void Ident::FDData(int sockid, char* buf, unsigned int buflen) {
     if (pos != std::string::npos) {
       while (++pos < identstr.length() && identstr[pos] == ' ');
       std::string user = identstr.substr(pos);
+      user.erase(std::remove_if(user.begin(), user.end(), [](char c) {
+        return c == '\r' || c == '\n' || c == '\0';
+      }), user.end());
+      size_t start = user.find_first_not_of(" \t");
+      if (start == std::string::npos) {
+        user = "*";
+      } else {
+        user = user.substr(start, user.find_last_not_of(" \t") - start + 1);
+      }
       global->log("[" + sessiontag + "] Received ident response: " + identstr);
       bncsession->ident(user);
       OPENSSL_cleanse(&user[0], user.size());

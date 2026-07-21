@@ -332,57 +332,65 @@ bool BncSessionClient::sendData(const char* data, unsigned int datalen) {
     }
   }
   else if (commandwords[0] == "PORT") {
-    std::string addr;
-    int port;
-    if (fromPASVString(commandwords[1], addr, port)) {
-      global->log("[" + sessiontag + "] Caught PORT command, preparing traffic bounce session");
-      int boundport = tbncsessions->activate(siteaddrfam, Core::AddressFamily::IPV4, addr, port, sessiontag);
-      if (boundport != -1) {
-        if (siteaddrfam == Core::AddressFamily::IPV4) {
-          modifiedcommand = commandwords[0] + " " + toPASVString(siterewriteaddr, boundport);
-          global->log("[" + sessiontag + "] Rewriting PORT " + addr + ":" + std::to_string(port) +
-            " -> PORT " + siterewriteaddr + ":" + std::to_string(boundport));
+    if (commandwords.size() < 2) {
+      global->log("[" + sessiontag + "] Caught PORT command without arguments, ignoring.");
+    } else {
+      std::string addr;
+      int port;
+      if (fromPASVString(commandwords[1], addr, port)) {
+        global->log("[" + sessiontag + "] Caught PORT command, preparing traffic bounce session");
+        int boundport = tbncsessions->activate(siteaddrfam, Core::AddressFamily::IPV4, addr, port, sessiontag);
+        if (boundport != -1) {
+          if (siteaddrfam == Core::AddressFamily::IPV4) {
+            modifiedcommand = commandwords[0] + " " + toPASVString(siterewriteaddr, boundport);
+            global->log("[" + sessiontag + "] Rewriting PORT " + addr + ":" + std::to_string(port) +
+              " -> PORT " + siterewriteaddr + ":" + std::to_string(boundport));
+          }
+          else {
+            modifiedcommand = "EPRT " + toExtendedPASVString(Core::AddressFamily::IPV6, siterewriteaddr, boundport);
+            global->log("[" + sessiontag + "] Rewriting PORT " + addr + ":" + std::to_string(port) + " -> " + modifiedcommand);
+            responsecatch = ResponseCatch::EPRT;
+            origincatch = OriginCatch::PORT;
+          }
         }
         else {
-          modifiedcommand = "EPRT " + toExtendedPASVString(Core::AddressFamily::IPV6, siterewriteaddr, boundport);
-          global->log("[" + sessiontag + "] Rewriting PORT " + addr + ":" + std::to_string(port) + " -> " + modifiedcommand);
-          responsecatch = ResponseCatch::EPRT;
-          origincatch = OriginCatch::PORT;
+          responsecatch = ResponseCatch::PORT;
+          modifiedcommand = "NOOP";
         }
       }
       else {
-        responsecatch = ResponseCatch::PORT;
-        modifiedcommand = "NOOP";
+        global->log("[" + sessiontag + "] Caught malformatted PORT command, ignoring. (" + command + ")");
       }
-    }
-    else {
-      global->log("[" + sessiontag + "] Caught malformatted PORT command, ignoring. (" + command + ")");
     }
   }
   else if (commandwords[0] == "EPRT") {
-    Core::AddressFamily addrfam;
-    std::string addr;
-    int port;
-    if (fromExtendedPASVString(commandwords[1], addrfam, addr, port)) {
-      std::string useaddr = addr;
-      if (useaddr.empty()) {
-        addrfam = clientaddrfam;
-        useaddr = clientaddr;
-      }
-      global->log("[" + sessiontag + "] Caught EPRT command, preparing traffic bounce session");
-      int boundport = tbncsessions->activate(siteaddrfam, addrfam, useaddr, port, sessiontag);
-      if (boundport != -1) {
+    if (commandwords.size() < 2) {
+      global->log("[" + sessiontag + "] Caught EPRT command without arguments, ignoring.");
+    } else {
+      Core::AddressFamily addrfam;
+      std::string addr;
+      int port;
+      if (fromExtendedPASVString(commandwords[1], addrfam, addr, port)) {
+        std::string useaddr = addr;
+        if (useaddr.empty()) {
+          addrfam = clientaddrfam;
+          useaddr = clientaddr;
+        }
+        global->log("[" + sessiontag + "] Caught EPRT command, preparing traffic bounce session");
+        int boundport = tbncsessions->activate(siteaddrfam, addrfam, useaddr, port, sessiontag);
+        if (boundport != -1) {
 
-        modifiedcommand = commandwords[0] + " " + toExtendedPASVString(siteaddrfam, siterewriteaddr, boundport);
-        global->log("[" + sessiontag + "] Rewriting " + command + " -> " + modifiedcommand);
+          modifiedcommand = commandwords[0] + " " + toExtendedPASVString(siteaddrfam, siterewriteaddr, boundport);
+          global->log("[" + sessiontag + "] Rewriting " + command + " -> " + modifiedcommand);
+        }
+        else {
+          responsecatch = ResponseCatch::EPRT;
+          modifiedcommand = "NOOP";
+        }
       }
       else {
-        responsecatch = ResponseCatch::EPRT;
-        modifiedcommand = "NOOP";
+        global->log("[" + sessiontag + "] Caught malformatted EPRT command, ignoring. (" + command + ")");
       }
-    }
-    else {
-      global->log("[" + sessiontag + "] Caught malformatted EPRT command, ignoring. (" + command + ")");
     }
   }
   if (!modifiedcommand.empty()) {
