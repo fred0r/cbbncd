@@ -326,6 +326,9 @@ void Crypto::base64Decode(const Core::BinaryData & indata, Core::BinaryData & ou
   unsigned int outsize = indata.size() / 4 * 3;
   outdata.resize(outsize);
   EVP_DecodeBlock(&outdata[0], &indata[0], indata.size());
+  if (static_cast<unsigned int>(padding) > outsize) {
+    padding = outsize;
+  }
   outdata.resize(outsize - padding);
 }
 
