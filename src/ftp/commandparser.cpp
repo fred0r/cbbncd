@@ -38,7 +38,7 @@ bool FTPCommandParser::parse(const char* newdata, unsigned int newdatalen) {
   }
   memcpy(databuf + databufpos, newdata, newdatalen);
   databufpos += newdatalen;
-  if (databuf[databufpos - 1] == '\n') {
+  if (databufpos > 0 && databuf[databufpos - 1] == '\n') {
     complete = true;
   }
   return complete;
