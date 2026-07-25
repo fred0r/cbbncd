@@ -1,8 +1,12 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/resource.h>
 #include <fcntl.h>
 #include <termios.h>
+#ifdef __linux
+#include <sys/prctl.h>
+#endif
 
 #include <cstdlib>
 #include <cstdio>
@@ -29,6 +33,14 @@
 #include "util.h"
 
 namespace {
+
+void disableCoreDumps() {
+  struct rlimit rl = {0, 0};
+  setrlimit(RLIMIT_CORE, &rl);
+#ifdef __linux
+  prctl(PR_SET_DUMPABLE, 0);
+#endif
+}
 
 struct Configuration {
   int listenport = 65432;
@@ -162,6 +174,7 @@ Configuration parseData(const std::string& data) {
 }
 
 int main(int argc, char** argv) {
+  disableCoreDumps();
   bool daemon = false;
   if (argc >= 2) {
     if (!strcmp(argv[1], "-d") || !strcmp(argv[1], "--daemon")) {
