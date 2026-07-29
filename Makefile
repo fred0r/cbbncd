@@ -68,7 +68,7 @@ application: core
 	@if [ -z "$(DATA)" ] && ( [ -z "$(ENCRYPT)" ] || [ -z "$(ENCDATA)" ] ); then echo "$(LASTDATA)" | sed s/\;/\\n/g > .last; fi
 	@if [ -n "$(ENCRYPT)" ] && [ -z "$(ENCDATA)" ]; then echo -e "WARNING: Proceeding without encryption."; fi
 	$(eval DATA := $(shell if [ -z "$(DATA)" ]; then echo $$(if [ -n "$(ENCDATA)" ]; then echo $(ENCDATA); else echo "$(AGGDATA)"; fi); fi))
-	$(CXX) $(ALLFLAGS) -o cbbncd -DBNCDATA="\"$(DATA)\"" $(wildcard src/*.cpp src/bnc/*.cpp src/ftp/*.cpp) $(LINK)
+	$(CXX) $(ALLFLAGS) -o cbbncd -DBNCDATA="\"$(DATA)\"" -DVERSION=$(VERSION) -DBUILDTIME=$(DATE) -DBOXTAG=$(BOXTAG) $(wildcard src/*.cpp src/bnc/*.cpp src/ftp/*.cpp) $(LINK)
 
 core:
 	@+$(MAKE) -C src/core

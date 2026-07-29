@@ -2,6 +2,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/resource.h>
+#include <sys/mman.h>
 #include <fcntl.h>
 #include <termios.h>
 #ifdef __linux
@@ -31,6 +32,7 @@
 #include "globalcontext.h"
 #include "listenportmanager.h"
 #include "util.h"
+#include "version.h"
 
 namespace {
 
@@ -188,11 +190,18 @@ int main(int argc, char** argv) {
   std::string data = BNCDATA;
   if (data.find(";") == std::string::npos) {
     Core::BinaryData passphrase = getPassphrase();
+    bool locked = false;
+    if (!passphrase.empty()) {
+      locked = (mlock(passphrase.data(), passphrase.size()) == 0);
+    }
     Core::BinaryData decodeddata;
     Crypto::base64Decode(Core::BinaryData(data.begin(), data.end()), decodeddata);
     Core::BinaryData decrypteddata;
     Crypto::decrypt(decodeddata, passphrase, decrypteddata);
     OPENSSL_cleanse(passphrase.data(), passphrase.size());
+    if (locked) {
+      munlock(passphrase.data(), passphrase.size());
+    }
     OPENSSL_cleanse(decodeddata.data(), decodeddata.size());
     if (decrypteddata.empty()) {
       std::cerr << "Error: Passphrase invalid or data tampered. Exiting." << std::endl;
@@ -204,6 +213,8 @@ int main(int argc, char** argv) {
   }
   Configuration cfg = parseData(data);
   OPENSSL_cleanse(&data[0], data.size());
+
+  std::cerr << Version::tag() << " " << Version::version() << " (built " << Version::compileTime() << ")" << std::endl;
 
   if (daemon) {
     daemonize();
